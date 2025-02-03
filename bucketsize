@@ -1,0 +1,37 @@
+import pandas as pd
+
+def parse_text_to_excel(input_file, output_file):
+    with open(input_file, "r", encoding="utf-16") as file:  # Try utf-16 if utf-8 fails
+        lines = file.readlines()
+
+    data = []
+    current_bucket = None
+
+    for line in lines:
+        line = line.strip()
+        if line.startswith("Bucket name:"):
+            current_bucket = line.replace("Bucket name:", "").strip()
+        elif line.startswith("Active version size:"):
+            active_size = line.replace("Active version size:", "").strip()
+        elif line.startswith("Deleted files size:"):
+            deleted_size = line.replace("Deleted files size:", "").strip()
+        elif line.startswith("First n-1 version size:"):
+            first_n1_size = line.replace("First n-1 version size:", "").strip()
+        elif line.startswith("Older versions beyond n-1:"):
+            older_versions_size = line.replace("Older versions beyond n-1:", "").strip()
+        elif line.startswith("Total size of all the versions:"):
+            total_size = line.replace("Total size of all the versions:", "").strip()
+            data.append([current_bucket, active_size, deleted_size, first_n1_size, older_versions_size, total_size])
+
+    df = pd.DataFrame(data, columns=[
+        "Bucket Name", "Active Version Size", "Deleted Files Size",
+        "First N-1 Version Size", "Older Versions Beyond N-1", "Total Size"
+    ])
+
+    df.to_excel(output_file, index=False)
+    print(f"Excel file saved: {output_file}")
+
+# Example usage
+input_file = "your_text_file.txt"  # Change to your actual file path
+output_file = "formatted_data.xlsx"
+parse_text_to_excel(input_file, output_file)
