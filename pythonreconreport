@@ -1,0 +1,67 @@
+import os
+import re
+import psycopg2
+import pandas as pd
+from openpyxl import Workbook
+
+# Database Connection Details
+DB_CONFIG = {
+    'dbname': 'your_db_name',  # Replace during runtime
+    'user': 'your_username',
+    'password': 'your_password',
+    'host': 'your_host',
+    'port': 'your_port'
+}
+
+# Placeholder to Replace
+DB_NAME_TOKEN = "{db_name}"
+
+# Get all .sql files and order them by prefix number
+def get_ordered_sql_files():
+    files = [f for f in os.listdir('.') if f.endswith('.sql')]
+    files.sort(key=lambda f: int(re.match(r'(\d+)', f).group(1)))  # Sort by leading number
+    return files
+
+# Execute queries and store results
+def execute_queries(files, db_name):
+    conn = psycopg2.connect(**DB_CONFIG)
+    cursor = conn.cursor()
+    results = {}
+    
+    for file in files:
+        with open(file, 'r') as f:
+            query = f.read().replace(DB_NAME_TOKEN, db_name)  # Replace placeholder
+        
+        try:
+            cursor.execute(query)
+            if cursor.description:  # If there's a result set
+                results[file] = cursor.fetchall()
+                col_names = [desc[0] for desc in cursor.description]
+                results[file] = pd.DataFrame(results[file], columns=col_names)
+            else:
+                results[file] = pd.DataFrame()  # No result (e.g., DDL statements)
+        except Exception as e:
+            print(f"Error executing {file}: {e}")
+            results[file] = None  # Store None for failed queries
+    
+    cursor.close()
+    conn.commit()
+    conn.close()
+    return results
+
+# Save results to an Excel file
+def save_results_to_excel(results, env, output_file="query_results.xlsx"):
+    output_file = f"query_results_{env}.xlsx"
+    with pd.ExcelWriter(output_file, engine='openpyxl') as writer:
+        for file, df in results.items():
+            sheet_name = os.path.splitext(file)[0][:31]  # Sheet name limit
+            if df is not None and not df.empty:
+                df.to_excel(writer, sheet_name=sheet_name, index=False)
+    print(f"Results saved to {output_file}")
+
+# Main Execution
+if __name__ == "__main__":
+    env = "dev"  # Change to 'uat' or 'prod' as needed before running
+    sql_files = get_ordered_sql_files()
+    results = execute_queries(sql_files, DB_CONFIG['dbname'])
+    save_results_to_excel(results, env)
